@@ -1,0 +1,7 @@
+# Cloudflare Pages deployment config
+# Deploy with:  npx wrangler pages deploy dist --project-name beyblade-x-arena
+
+name = "beyblade-x-arena"
+pages_build_output_dir = "dist"
+
+compatibility_date = "2025-01-01"

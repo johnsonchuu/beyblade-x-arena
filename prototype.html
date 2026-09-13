@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beyblade X Tournament Tracker</title>
+    <style>
+        :root {
+            --bg-color: #0d0e15;
+            --panel-bg: #1a1c29;
+            --primary: #00ffcc;
+            --danger: #ff0055;
+            --text: #e0e0e0;
+            --win: #ffe600;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1, h2, h3 {
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--primary);
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+            margin: 0 0 10px 0;
+        }
+
+        h2 {
+            margin-top: 30px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            letter-spacing: 1px;
+            font-size: 14px;
+        }
+
+        .container {
+            background-color: var(--panel-bg);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 30px;
+            width: 100%;
+            max-width: 900px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Save indicator */
+        .save-indicator {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            background: rgba(0, 255, 204, 0.12);
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            letter-spacing: 1px;
+            opacity: 0;
+            transform: translateY(-6px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+            z-index: 50;
+        }
+        .save-indicator.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Screens */
+        #screen-setup, #screen-dashboard, #screen-match {
+            display: none;
+        }
+        .active-screen {
+            display: block !important;
+        }
+
+        /* Inputs & Buttons */
+        input {
+            padding: 12px;
+            background: #2a2d3e;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            width: 100%;
+            transition: border-color 0.2s ease;
+        }
+        input:focus {
+            border-color: var(--primary);
+        }
+        input.invalid {
+            border-color: var(--danger);
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: #000;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.4);
+        }
+        .btn-primary:hover:not(:disabled) {
+            box-shadow: 0 0 25px rgba(0, 255, 204, 0.8);
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background-color: transparent;
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+        .btn-danger:hover:not(:disabled) {
+            background-color: var(--danger);
+            color: #fff;
+            box-shadow: 0 0 15px rgba(255, 0, 85, 0.5);
+        }
+
+        /* Inline validation message */
+        .form-feedback {
+            min-height: 20px;
+            font-size: 12px;
+            color: var(--danger);
+            margin: 6px 2px 2px;
+            letter-spacing: 0.5px;
+        }
+
+        /* Setup Form */
+        .setup-form {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px dashed var(--primary);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .deck-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        /* Player Tags & Decks */
+        .player-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .player-card {
+            background: rgba(0, 255, 204, 0.05);
+            border: 1px solid #333;
+            padding: 15px;
+            border-radius: 8px;
+            position: relative;
+        }
+        .player-card h4 {
+            margin: 0 0 10px 0;
+            color: var(--primary);
+            display: flex;
+            justify-content: space-between;
+        }
+        .remove-player {
+            color: var(--danger);
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .deck-tags {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .deck-tag {
+            background: #1a1c29;
+            border: 1px solid #444;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #ccc;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Dashboard Screen */
+        .table-responsive {
+            overflow-x: auto;
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            min-width: 500px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+        th {
+            color: var(--primary);
+            font-weight: normal;
+        }
+        td.center-text, th.center-text {
+            text-align: center;
+        }
+
+        .matches-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 15px;
+        }
+        .match-card {
+            background: #2a2d3e;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+        .match-card:hover {
+            border-color: var(--primary);
+        }
+        .match-card.completed {
+            opacity: 0.5;
+            cursor: default;
+        }
+        .match-card.completed:hover {
+            border-color: transparent;
+        }
+        .vs {
+            color: var(--danger);
+            font-style: italic;
+            font-weight: bold;
+            margin: 0 10px;
+        }
+
+        /* Progress bar */
+        .tournament-progress {
+            margin-bottom: 25px;
+            font-size: 13px;
+            color: #999;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+        .progress-track {
+            background: #2a2d3e;
+            border-radius: 10px;
+            height: 10px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #00cfa8);
+            width: 0%;
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        }
+
+        /* Match History */
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        .history-item {
+            background: rgba(0, 0, 0, 0.4);
+            border-left: 4px solid var(--primary);
+            padding: 15px 20px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        .history-item.p2-win {
+            border-left-color: var(--danger);
+        }
+        .winner-name {
+            color: var(--win);
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(255, 230, 0, 0.5);
+        }
+
+        /* Match Screen */
+        .match-arena {
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            margin: 30px 0;
+            background: #0d0e15;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #333;
+            position: relative;
+            gap: 10px;
+        }
+        .player-side {
+            flex: 1;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+        }
+        .match-deck-display {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-top: -5px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .match-deck-display .deck-tag {
+            border-color: rgba(0, 255, 204, 0.4);
+            color: var(--primary);
+            background: rgba(0, 255, 204, 0.05);
+            width: 90%;
+        }
+
+        .score-display {
+            font-size: 72px;
+            font-weight: bold;
+            color: var(--primary);
+            text-shadow: 0 0 20px rgba(0, 255, 204, 0.4);
+            margin: auto 0 20px 0;
+            font-family: monospace;
+        }
+        .point-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+            margin-top: auto;
+        }
+        .pt-btn {
+            width: 100%;
+            max-width: 180px;
+            background: transparent;
+            border: 1px solid var(--text);
+            color: var(--text);
+            font-size: 13px;
+            padding: 10px 5px;
+        }
+        .pt-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .pt-btn.xtreme {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+        .pt-btn.xtreme:hover:not(:disabled) {
+            background: rgba(255, 0, 85, 0.1);
+            box-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
+        }
+        .winner-banner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 20px 40px;
+            border: 2px solid var(--win);
+            color: var(--win);
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(255, 230, 0, 0.5);
+            display: none;
+            z-index: 10;
+            text-align: center;
+            width: 80%;
+        }
+
+        @media (max-width: 600px) {
+            .match-arena {
+                flex-direction: column;
+            }
+            .vs {
+                margin: 15px 0 !important;
+            }
+            .score-display {
+                font-size: 56px;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="save-indicator" id="saveIndicator">✓ Saved</div>
+
+    <h1>Beyblade X Arena</h1>
+    <div class="subtitle">3 on 3 Round-Robin Tournament System</div>
+
+    <div class="container">
+        <!-- Screen 1: Registration -->
+        <div id="screen-setup" class="active-screen">
+            <h2>Blader Registration</h2>
+
+            <div class="setup-form">
+                <div class="input-group">
+                    <input type="text" id="playerName" placeholder="Enter Blader Name" onkeypress="handleEnter(event)">
+                </div>
+                <div class="deck-inputs">
+                    <input type="text" id="bey1" placeholder="Bey 1 (e.g. UX-14)">
+                    <input type="text" id="bey2" placeholder="Bey 2 (e.g. BX-36)">
+                    <input type="text" id="bey3" placeholder="Bey 3 (e.g. BX-38)">
+                </div>
+                <button class="btn-primary" style="width: 100%" onclick="addPlayer()">Add Player & Deck</button>
+                <div class="form-feedback" id="setupFeedback"></div>
+            </div>
+
+            <div class="player-list" id="playerList"></div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn-primary" style="width: 100%; font-size: 18px;" onclick="startTournament()">Start Tournament</button>
+            </div>
+        </div>
+
+        <!-- Screen 2: Dashboard -->
+        <div id="screen-dashboard">
+            <div class="tournament-progress">
+                <span id="progressLabel"></span>
+                <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+            </div>
+
+            <h2>Leaderboard</h2>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="8%">Rank</th>
+                            <th width="22%">Blader</th>
+                            <th width="40%">Registered Deck</th>
+                            <th class="center-text">W</th>
+                            <th class="center-text">L</th>
+                            <th class="center-text">Pts</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody"></tbody>
+                </table>
+            </div>
+
+            <h2>Match Schedule</h2>
+            <div class="matches-grid" id="matchesGrid"></div>
+
+            <h2>Match History</h2>
+            <div id="matchHistory" class="history-list"></div>
+
+            <div style="text-align: center; margin-top: 40px; border-top: 1px solid #333; padding-top: 20px;">
+                <button class="btn-danger" onclick="resetTournament()">End Tournament</button>
+            </div>
+        </div>
+
+        <!-- Screen 3: Match Arena -->
+        <div id="screen-match">
+            <h2 id="matchTitle">Match in Progress</h2>
+
+            <div class="match-arena">
+                <div class="winner-banner" id="winnerBanner">PLAYER WINS!</div>
+
+                <!-- Player 1 -->
+                <div class="player-side">
+                    <h3 id="p1Name">Player 1</h3>
+                    <div class="match-deck-display" id="p1Deck"></div>
+                    <div class="score-display" id="p1Score">0</div>
+                    <div class="point-buttons" id="p1Buttons">
+                        <button class="pt-btn" onclick="addScore(1, 1)">+1 Spin/Over</button>
+                        <button class="pt-btn" onclick="addScore(1, 2)">+2 Burst</button>
+                        <button class="pt-btn xtreme" onclick="addScore(1, 3)">+3 Xtreme</button>
+                        <button class="pt-btn btn-danger" style="margin-top:5px" onclick="addScore(1, -1)">-1 (Undo)</button>
+                    </div>
+                </div>
+
+                <div class="vs" style="margin-top: 150px;">VS</div>
+
+                <!-- Player 2 -->
+                <div class="player-side">
+                    <h3 id="p2Name">Player 2</h3>
+                    <div class="match-deck-display" id="p2Deck"></div>
+                    <div class="score-display" id="p2Score">0</div>
+                    <div class="point-buttons" id="p2Buttons">
+                        <button class="pt-btn" onclick="addScore(2, 1)">+1 Spin/Over</button>
+                        <button class="pt-btn" onclick="addScore(2, 2)">+2 Burst</button>
+                        <button class="pt-btn xtreme" onclick="addScore(2, 3)">+3 Xtreme</button>
+                        <button class="pt-btn btn-danger" style="margin-top:5px" onclick="addScore(2, -1)">-1 (Undo)</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <button class="btn-primary" id="finishMatchBtn" onclick="finishMatch()" style="display:none;">Record Result</button>
+                <button class="btn-danger" onclick="backToDashboard()" style="margin-left: 10px;">Cancel Match</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'beyblade_x_state_v1';
+        const TARGET_SCORE = 4;
+
+        let players = [];
+        let matches = [];
+        let currentMatchId = null;
+        let currentS1 = 0;
+        let currentS2 = 0;
+
+        // ---------- Persistence ----------
+        function saveState() {
+            const data = {
+                players,
+                matches,
+                currentMatchId,
+                currentS1,
+                currentS2,
+                screen: document.querySelector('.active-screen')?.id || 'screen-setup'
+            };
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            } catch (e) {
+                // Storage unavailable (private mode / quota) — fail silently
+            }
+            flashSaved();
+        }
+
+        function flashSaved() {
+            const el = document.getElementById('saveIndicator');
+            el.classList.add('show');
+            clearTimeout(el._t);
+            el._t = setTimeout(() => el.classList.remove('show'), 1200);
+        }
+
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return;
+                const data = JSON.parse(raw);
+                players = Array.isArray(data.players) ? data.players : [];
+                matches = Array.isArray(data.matches) ? data.matches : [];
+                currentMatchId = (typeof data.currentMatchId === 'number') ? data.currentMatchId : null;
+                currentS1 = data.currentS1 || 0;
+                currentS2 = data.currentS2 || 0;
+                restoreScreen(data.screen);
+            } catch (e) {
+                // Corrupt or unreadable state — start fresh
+                clearState();
+            }
+        }
+
+        function restoreScreen(screen) {
+            // Only restore the arena if that match is actually in progress (not completed)
+            const m = matches.find(x => x.id === currentMatchId);
+            if (screen === 'screen-match' && m && !m.completed) {
+                populateMatchUI(m);
+                showScreen('screen-match');
+            } else if (matches.length > 0) {
+                // A tournament exists — go to dashboard
+                updateDashboard();
+                showScreen('screen-dashboard');
+            } else {
+                // Just some registered (unsaved?) players — back to registration
+                renderPlayerList();
+                showScreen('screen-setup');
+            }
+        }
+
+        function clearState() {
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.active-screen').forEach(el => el.classList.remove('active-screen'));
+            document.getElementById(screenId).classList.add('active-screen');
+            saveState();
+        }
+
+        function setFeedback(msg, isError) {
+            const el = document.getElementById('setupFeedback');
+            el.textContent = msg;
+            el.style.color = isError ? 'var(--danger)' : 'var(--primary)';
+        }
+
+        // ---------- Phase 1: Registration ----------
+        function handleEnter(e) {
+            if (e.key === 'Enter') addPlayer();
+        }
+
+        function addPlayer() {
+            const nameInput = document.getElementById('playerName');
+            const name = nameInput.value.trim();
+
+            if (!name) {
+                nameInput.classList.add('invalid');
+                setFeedback('Please enter a Blader name.', true);
+                setTimeout(() => nameInput.classList.remove('invalid'), 1200);
+                return;
+            }
+            if (players.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+                nameInput.classList.add('invalid');
+                setFeedback('A Blader with that name already exists.', true);
+                setTimeout(() => nameInput.classList.remove('invalid'), 1200);
+                return;
+            }
+
+            const b1 = document.getElementById('bey1').value.trim() || 'Custom Bey 1';
+            const b2 = document.getElementById('bey2').value.trim() || 'Custom Bey 2';
+            const b3 = document.getElementById('bey3').value.trim() || 'Custom Bey 3';
+
+            players.push({ name, deck: [b1, b2, b3] });
+
+            nameInput.value = '';
+            document.getElementById('bey1').value = '';
+            document.getElementById('bey2').value = '';
+            document.getElementById('bey3').value = '';
+            setFeedback(`${name} added ✓`, false);
+
+            renderPlayerList();
+            nameInput.focus();
+            saveState();
+        }
+
+        function removePlayer(name) {
+            players = players.filter(p => p.name !== name);
+            renderPlayerList();
+            saveState();
+        }
+
+        function renderPlayerList() {
+            const list = document.getElementById('playerList');
+            if (players.length === 0) {
+                list.innerHTML = '<div style="text-align:center; color:#555; padding:20px;">No Bladers registered yet. Add at least 2 to start.</div>';
+                return;
+            }
+            list.innerHTML = players.map(p =>
+                `<div class="player-card">
+                    <h4>${p.name} <span class="remove-player" onclick="removePlayer('${p.name.replace(/'/g, "\\'")}')">×</span></h4>
+                    <div class="deck-tags">
+                        <div class="deck-tag">1. ${p.deck[0]}</div>
+                        <div class="deck-tag">2. ${p.deck[1]}</div>
+                        <div class="deck-tag">3. ${p.deck[2]}</div>
+                    </div>
+                </div>`
+            ).join('');
+        }
+
+        function startTournament() {
+            if (players.length < 2) {
+                setFeedback('Need at least 2 Bladers to start!', true);
+                return;
+            }
+            generateMatches();
+            setFeedback('');
+            updateDashboard();
+            showScreen('screen-dashboard');
+        }
+
+        function generateMatches() {
+            matches = [];
+            let matchId = 0;
+            for (let i = 0; i < players.length; i++) {
+                for (let j = i + 1; j < players.length; j++) {
+                    matches.push({
+                        id: matchId++,
+                        p1: players[i].name,
+                        p2: players[j].name,
+                        s1: 0,
+                        s2: 0,
+                        completed: false,
+                        winner: null
+                    });
+                }
+            }
+        }
+
+        // ---------- Phase 2: Dashboard & Stats ----------
+        function updateDashboard() {
+            let stats = {};
+            players.forEach(p => stats[p.name] = { w: 0, l: 0, pts: 0, deck: p.deck });
+
+            matches.forEach(m => {
+                if (m.completed) {
+                    stats[m.p1].pts += m.s1;
+                    stats[m.p2].pts += m.s2;
+                    if (m.s1 > m.s2) {
+                        stats[m.p1].w++;
+                        stats[m.p2].l++;
+                    } else if (m.s2 > m.s1) {
+                        stats[m.p2].w++;
+                        stats[m.p1].l++;
+                    }
+                }
+            });
+
+            let leaderboard = players.map(p => ({ name: p.name, ...stats[p.name] }));
+            leaderboard.sort((a, b) => b.w - a.w || b.pts - a.pts);
+
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = leaderboard.map((p, index) =>
+                `<tr>
+                    <td>${index + 1}</td>
+                    <td><strong>${p.name}</strong></td>
+                    <td>
+                        <div style="font-size: 11px; color: #aaa;">
+                            ${p.deck[0]} | ${p.deck[1]} | ${p.deck[2]}
+                        </div>
+                    </td>
+                    <td class="center-text" style="color:var(--primary)">${p.w}</td>
+                    <td class="center-text" style="color:var(--danger)">${p.l}</td>
+                    <td class="center-text">${p.pts}</td>
+                </tr>`
+            ).join('');
+
+            // Progress
+            const done = matches.filter(m => m.completed).length;
+            const pct = matches.length ? Math.round(done / matches.length * 100) : 0;
+            document.getElementById('progressLabel').textContent = `${done} / ${matches.length} matches completed`;
+            document.getElementById('progressFill').style.width = pct + '%';
+
+            const grid = document.getElementById('matchesGrid');
+            grid.innerHTML = matches.map(m =>
+                `<div class="match-card ${m.completed ? 'completed' : ''}" onclick="${m.completed ? '' : `openMatch(${m.id})`}">
+                    <div>${m.p1} <span class="vs">VS</span> ${m.p2}</div>
+                    ${m.completed ?
+                        `<div style="margin-top:10px; color:var(--primary); font-weight:bold;">${m.s1} - ${m.s2}</div>` :
+                        `<div style="margin-top:10px; font-size:12px; color:#888;">Click to Play</div>`}
+                </div>`
+            ).join('');
+
+            const historyContainer = document.getElementById('matchHistory');
+            const completedMatches = matches.filter(m => m.completed);
+
+            if (completedMatches.length === 0) {
+                historyContainer.innerHTML = '<div style="text-align:center; color:#555; padding: 20px;">No matches completed yet.</div>';
+            } else {
+                historyContainer.innerHTML = completedMatches.map(m => {
+                    const p1Class = m.winner === m.p1 ? 'winner-name' : '';
+                    const p2Class = m.winner === m.p2 ? 'winner-name' : '';
+                    const borderClass = m.winner === m.p2 ? 'p2-win' : '';
+
+                    return `
+                    <div class="history-item ${borderClass}">
+                        <div style="flex:1; text-align:right;" class="${p1Class}">${m.p1}</div>
+                        <div style="flex:0 0 100px; text-align:center; font-weight:bold; letter-spacing:2px; font-size:18px;">
+                            <span style="color:var(--primary)">${m.s1}</span><span style="color:#555; margin:0 5px;">-</span><span style="color:var(--danger)">${m.s2}</span>
+                        </div>
+                        <div style="flex:1; text-align:left;" class="${p2Class}">${m.p2}</div>
+                    </div>`;
+                }).reverse().join('');
+            }
+        }
+
+        // ---------- Phase 3: Live Arena Scoring ----------
+        function populateMatchUI(m) {
+            const p1Data = players.find(p => p.name === m.p1);
+            const p2Data = players.find(p => p.name === m.p2);
+
+            document.getElementById('p1Name').innerText = m.p1;
+            document.getElementById('p2Name').innerText = m.p2;
+
+            document.getElementById('p1Deck').innerHTML = p1Data ? p1Data.deck.map(d => `<div class="deck-tag">${d}</div>`).join('') : '';
+            document.getElementById('p2Deck').innerHTML = p2Data ? p2Data.deck.map(d => `<div class="deck-tag">${d}</div>`).join('') : '';
+
+            // Refresh the visible score and win-state from the restored in-memory values
+            updateScoreUI();
+            checkWinCondition();
+        }
+
+        function openMatch(id) {
+            currentMatchId = id;
+            const m = matches.find(x => x.id === id);
+            if (!m) return;
+
+            currentS1 = 0;
+            currentS2 = 0;
+            setButtonsEnabled(true);
+
+            populateMatchUI(m);
+            updateScoreUI();
+            showScreen('screen-match');
+        }
+
+        function setButtonsEnabled(enabled) {
+            // Keep the Undo (-1) buttons always enabled; lock the + buttons once won.
+            ['p1Buttons', 'p2Buttons'].forEach(id => {
+                const btns = document.getElementById(id).querySelectorAll('.pt-btn');
+                btns.forEach(b => {
+                    const isUndo = b.textContent.includes('Undo');
+                    b.disabled = !enabled && !isUndo;
+                });
+            });
+        }
+
+        function addScore(player, pts) {
+            if (player === 1) {
+                currentS1 = Math.max(0, currentS1 + pts);
+            } else {
+                currentS2 = Math.max(0, currentS2 + pts);
+            }
+            updateScoreUI();
+            checkWinCondition();
+            saveState();
+        }
+
+        function updateScoreUI() {
+            document.getElementById('p1Score').innerText = currentS1;
+            document.getElementById('p2Score').innerText = currentS2;
+        }
+
+        function checkWinCondition() {
+            const m = matches.find(x => x.id === currentMatchId);
+            const banner = document.getElementById('winnerBanner');
+            const finishBtn = document.getElementById('finishMatchBtn');
+
+            if (currentS1 >= TARGET_SCORE) {
+                banner.innerHTML = `${m.p1} WINS!<br><span style="font-size:16px; color:#aaa">Score: ${currentS1} - ${currentS2}</span>`;
+                banner.style.display = 'block';
+                finishBtn.style.display = 'inline-block';
+                setButtonsEnabled(false);
+            } else if (currentS2 >= TARGET_SCORE) {
+                banner.innerHTML = `${m.p2} WINS!<br><span style="font-size:16px; color:#aaa">Score: ${currentS2} - ${currentS1}</span>`;
+                banner.style.display = 'block';
+                finishBtn.style.display = 'inline-block';
+                setButtonsEnabled(false);
+            } else {
+                banner.style.display = 'none';
+                finishBtn.style.display = 'none';
+                setButtonsEnabled(true);
+            }
+        }
+
+        function finishMatch() {
+            const m = matches.find(x => x.id === currentMatchId);
+            if (!m) return;
+            m.s1 = currentS1;
+            m.s2 = currentS2;
+            m.completed = true;
+            m.winner = currentS1 >= TARGET_SCORE ? m.p1 : m.p2;
+
+            currentMatchId = null;
+            currentS1 = 0;
+            currentS2 = 0;
+
+            updateDashboard();
+            showScreen('screen-dashboard');
+        }
+
+        function backToDashboard() {
+            const m = matches.find(x => x.id === currentMatchId);
+            const hasProgress = currentS1 > 0 || currentS2 > 0 || (m && m.completed);
+            if (hasProgress && !confirm('Cancel this match? The current score will be lost.')) {
+                return;
+            }
+            currentMatchId = null;
+            currentS1 = 0;
+            currentS2 = 0;
+            updateDashboard();
+            showScreen('screen-dashboard');
+        }
+
+        function resetTournament() {
+            if (confirm("Are you sure you want to end and reset the tournament? All data will be lost.")) {
+                players = [];
+                matches = [];
+                currentMatchId = null;
+                currentS1 = 0;
+                currentS2 = 0;
+                clearState();
+                renderPlayerList();
+                setFeedback('');
+                showScreen('screen-setup');
+            }
+        }
+
+        // ---------- Boot ----------
+        loadState();
+    </script>
+</body>
+</html>

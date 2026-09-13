@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/analytics.tsx","./src/components/beypicker.tsx","./src/components/dashboard.tsx","./src/components/matcharena.tsx","./src/components/registration.tsx","./src/lib/engine.ts","./src/lib/i18n.tsx","./src/lib/parts.ts","./src/lib/storage.ts","./src/lib/types.ts"],"version":"5.6.3"}
