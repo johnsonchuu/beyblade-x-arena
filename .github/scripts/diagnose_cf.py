@@ -1,79 +1,113 @@
 #!/usr/bin/env python3
 """
-Leak-free Cloudflare credential diagnostic.
+Cloudflare credential diagnostic - reports what the API actually says.
 
-Prints only lengths, booleans, and masked identifiers - never the raw
-account ID or token - because this repository is public and Actions logs
-are world-readable.
+Deliberately does NOT gate on credential shape. Length/shape is a heuristic;
+the API response is ground truth. Shape mismatches are reported as warnings so
+we still reach the real call and see the real error.
 
-Exit code is always 0; this is a diagnostic, not a gate.
+Never prints the raw account ID or token - this repo is public and Actions
+logs are world-readable. Identifiers are masked to first 6 / last 4.
 """
 import json
 import os
 import sys
+import urllib.error
 import urllib.request
 
-account = os.environ.get("CF_ACCOUNT", "")
-token = os.environ.get("CF_TOKEN", "")
+account = os.environ.get("CF_ACCOUNT", "").strip()
+token = os.environ.get("CF_TOKEN", "").strip()
 
-print(f"raw secret length      : {len(account)}")
+print("=== credential shape (warnings only) ===")
+print(f"account length         : {len(account)}")
 print(f"token length           : {len(token)}")
-print(f"has surrounding space  : {'YES  <-- copy-paste newline/space' if account != account.strip() else 'no'}")
-print(f"has inner whitespace   : {'YES  <-- malformed' if any(c.isspace() for c in account.strip()) else 'no'}")
+print(f"account whitespace     : {'PRESENT - strip it' if account != os.environ.get('CF_ACCOUNT', '') else 'none'}")
+print(f"token whitespace       : {'PRESENT - strip it' if token != os.environ.get('CF_TOKEN', '') else 'none'}")
 
-stripped = account.strip()
+if len(account) != 32:
+    print(f"WARN account id is {len(account)} chars; a Cloudflare account ID is normally 32 hex chars.")
+if len(token) != 40:
+    print(f"WARN token is {len(token)} chars; Cloudflare API tokens are usually ~40 chars.")
+print("(warnings only - continuing to the live API call below)")
 
-# Shape checks. Cloudflare account IDs are exactly 32 hex chars; API tokens
-# are 40 chars. Length alone catches the most common copy-paste mistakes
-# (Account ID pasted into the token secret, or a Zone ID / dashboard URL
-# pasted into the account secret).
-ok_account_shape = len(stripped) == 32 and all(c in "0123456789abcdef" for c in stripped.lower())
-ok_token_shape = len(token) == 40
-print(f"account id shape ok    : {ok_account_shape}  (expected 32 hex chars, got {len(stripped)})")
-print(f"api token shape ok     : {ok_token_shape}  (expected 40 chars, got {len(token)})")
-
-if not ok_token_shape and len(token) == 32:
-    print("  -> CLOUDFLARE_API_TOKEN looks like an ACCOUNT ID (32 hex chars), not an API token.")
-    print("  -> Create a token: Cloudflare dashboard > My Profile > API Tokens > Create Token")
-    print("     ('Edit Cloudflare Workers' template includes the Pages permissions needed).")
-elif not ok_token_shape:
-    print("  -> CLOUDFLARE_API_TOKEN is not the expected 40-char length; re-copy it from the API Tokens page.")
-
-if not ok_account_shape:
-    print("  -> CLOUDFLARE_ACCOUNT_ID is not a 32-hex-char account ID.")
-    print("  -> Copy it from the Cloudflare dashboard sidebar ('Account ID'), not a Zone ID or a URL.")
-
-if not (ok_account_shape and ok_token_shape):
-    print()
-    print("Stopping here: the credential shapes are wrong, so the API call below cannot succeed.")
-    sys.exit(0)
-
+print()
+print("=== live API: GET /accounts ===")
 req = urllib.request.Request(
     "https://api.cloudflare.com/client/v4/accounts",
     headers={"Authorization": f"Bearer {token}"},
 )
 try:
     with urllib.request.urlopen(req, timeout=30) as resp:
+        status = resp.status
         payload = json.load(resp)
+except urllib.error.HTTPError as exc:
+    status = exc.code
+    body = exc.read().decode("utf-8", "replace")
+    print(f"HTTP status            : {status}")
+    print(f"raw response body      : {body}")
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        payload = {}
 except Exception as exc:  # noqa: BLE001 - diagnostic only
-    print(f"accounts query failed  : {exc}")
+    print(f"request failed         : {type(exc).__name__}: {exc}")
     sys.exit(0)
-
-ids = [a.get("id", "") for a in (payload.get("result") or [])]
+else:
+    print(f"HTTP status            : {status}")
 
 print(f"api success            : {payload.get('success')}")
 print(f"api errors             : {payload.get('errors')}")
-print(f"accounts visible       : {len(ids)}")
+print(f"api messages           : {payload.get('messages')}")
+
+results = payload.get("result") or []
+print(f"accounts returned      : {len(results)}")
+
 
 def mask(value: str) -> str:
-    return f"{value[:6]}...{value[-4:]} (len {len(value)})" if len(value) > 10 else f"(short: len {len(value)})"
+    if not value:
+        return "(empty)"
+    return f"{value[:6]}...{value[-4:]}" if len(value) > 10 else f"(short,len {len(value)})"
 
-for i, acct in enumerate(ids, 1):
-    print(f"  account {i}            : {mask(acct)}")
 
-print(f"secret == visible acct : {stripped in ids}")
-if ids and stripped not in ids:
-    print("  -> CLOUDFLARE_ACCOUNT_ID does not match any account this token can see.")
-    print("  -> Re-copy it from the Cloudflare dashboard sidebar (Account ID), not a Zone ID.")
-elif not ids:
-    print("  -> Token cannot list any account; it may be scoped to a different account or lack Account:Read.")
+for i, acct in enumerate(results, 1):
+    print(f"  account {i}            : {mask(acct.get('id', ''))}  name={acct.get('name')!r}")
+
+if results:
+    visible = [a.get("id", "") for a in results]
+    if account in visible:
+        print("RESULT                 : account ID matches a visible account - credentials look correct.")
+    else:
+        print("RESULT                 : account ID does NOT match any visible account.")
+        print("                         Token is valid; the ACCOUNT_ID secret points at the wrong account.")
+
+print()
+print("=== live API: GET /accounts/<account>/pages/projects ===")
+if not account:
+    print("skipped                : no account id supplied")
+    sys.exit(0)
+
+req2 = urllib.request.Request(
+    f"https://api.cloudflare.com/client/v4/accounts/{account}/pages/projects",
+    headers={"Authorization": f"Bearer {token}"},
+)
+try:
+    with urllib.request.urlopen(req2, timeout=30) as resp:
+        payload2 = json.load(resp)
+        print(f"HTTP status            : {resp.status}")
+except urllib.error.HTTPError as exc:
+    print(f"HTTP status            : {exc.code}")
+    body = exc.read().decode("utf-8", "replace")
+    print(f"raw response body      : {body}")
+    try:
+        payload2 = json.loads(body)
+    except json.JSONDecodeError:
+        payload2 = {}
+except Exception as exc:  # noqa: BLE001
+    print(f"request failed         : {type(exc).__name__}: {exc}")
+    sys.exit(0)
+
+print(f"api success            : {payload2.get('success')}")
+print(f"api errors             : {payload2.get('errors')}")
+print(f"projects returned      : {len(payload2.get('result') or [])}")
+for proj in payload2.get("result") or []:
+    print(f"  project              : {proj.get('name')!r}")
