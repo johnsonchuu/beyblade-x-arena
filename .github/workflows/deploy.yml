@@ -28,13 +28,42 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Leak-free credential diagnostic: prints only lengths / booleans,
+      # never the account ID or token itself (this repo is public).
+      - name: Diagnose Cloudflare credentials
+        continue-on-error: true
+        env:
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "raw secret length : ${#CF_ACCOUNT}"
+          if printf '%s' "$CF_ACCOUNT" | grep -qE '[[:space:]]'; then
+            echo "whitespace in secret: YES  <-- trailing newline/space from copy-paste"
+          else
+            echo "whitespace in secret: NO"
+          fi
+          echo "--- accounts visible to this token ---"
+          curl -s -H "Authorization: Bearer $CF_TOKEN" \
+            https://api.cloudflare.com/client/v4/accounts \
+            | python3 -c "
+import json,os,sys
+d=json.load(sys.stdin)
+print('api success      :', d.get('success'))
+print('api errors       :', d.get('errors'))
+accts=[a['id'] for a in (d.get('result') or [])]
+print('accounts visible :', len(accts))
+sec_raw=os.environ['CF_ACCOUNT']
+print('secret matches a visible account:', sec_raw in accts)
+print('stripped matches a visible account:', sec_raw.strip() in accts)
+"
+
       - name: Ensure Pages project exists
+        continue-on-error: true
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages project create beyblade-x-arena --production-branch=main
-        continue-on-error: true
 
       - name: Publish to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
