@@ -23,6 +23,31 @@ print(f"has inner whitespace   : {'YES  <-- malformed' if any(c.isspace() for c 
 
 stripped = account.strip()
 
+# Shape checks. Cloudflare account IDs are exactly 32 hex chars; API tokens
+# are 40 chars. Length alone catches the most common copy-paste mistakes
+# (Account ID pasted into the token secret, or a Zone ID / dashboard URL
+# pasted into the account secret).
+ok_account_shape = len(stripped) == 32 and all(c in "0123456789abcdef" for c in stripped.lower())
+ok_token_shape = len(token) == 40
+print(f"account id shape ok    : {ok_account_shape}  (expected 32 hex chars, got {len(stripped)})")
+print(f"api token shape ok     : {ok_token_shape}  (expected 40 chars, got {len(token)})")
+
+if not ok_token_shape and len(token) == 32:
+    print("  -> CLOUDFLARE_API_TOKEN looks like an ACCOUNT ID (32 hex chars), not an API token.")
+    print("  -> Create a token: Cloudflare dashboard > My Profile > API Tokens > Create Token")
+    print("     ('Edit Cloudflare Workers' template includes the Pages permissions needed).")
+elif not ok_token_shape:
+    print("  -> CLOUDFLARE_API_TOKEN is not the expected 40-char length; re-copy it from the API Tokens page.")
+
+if not ok_account_shape:
+    print("  -> CLOUDFLARE_ACCOUNT_ID is not a 32-hex-char account ID.")
+    print("  -> Copy it from the Cloudflare dashboard sidebar ('Account ID'), not a Zone ID or a URL.")
+
+if not (ok_account_shape and ok_token_shape):
+    print()
+    print("Stopping here: the credential shapes are wrong, so the API call below cannot succeed.")
+    sys.exit(0)
+
 req = urllib.request.Request(
     "https://api.cloudflare.com/client/v4/accounts",
     headers={"Authorization": f"Bearer {token}"},
