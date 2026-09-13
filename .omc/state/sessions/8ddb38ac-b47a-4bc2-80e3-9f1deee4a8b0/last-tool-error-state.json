@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /Users/johnson/Projects/beyblade\\nchmod +x scripts/check-cf-credentials.sh\\necho \\\"=== T1: 32-hex account ID passed as ACCOUNT (should PASS) ===\\\"\\nprintf '%s' \\\"a1b2c3d4e5f60718293a4b5...",
-  "error": "Exit code 1\n=== T1: 32-hex account ID passed as ACCOUNT (should PASS) ===\nsource        : clipboard\nlength        : 224\npreview       : 可发布密...0t\nwhitespace    : PRESENT  <-- strip it, or use 'printf %s' piped to gh\n\nWRONG VALUE for CLOUDFLARE_ACCOUNT_ID.\n  Expected exactly 32 hex characters, got 224.\n  Get it from: Workers & Pages > Overview > right sidebar 'Account ID'.\n\n=== T2: same 32-hex passed as TOKEN (should FAIL with WRONG SECRET) ===\nsource        : clipboard\nlength        : 224\nprevie...",
-  "timestamp": "2026-09-13T16:31:42.666Z",
-  "retry_count": 1
-}
