@@ -2,6 +2,36 @@
 
 A professional, esports-grade **Beyblade X** tournament manager and scoring engine. Built as a responsive, mobile-first Single Page Application with offline-first persistence.
 
+**🔴 Live:** https://beyblade-x-arena.pages.dev/
+
+## CI/CD
+
+Pushes to `main` typecheck, build, and deploy to Cloudflare Pages via
+`.github/workflows/deploy.yml`. The account ID is resolved from the API token
+at deploy time (`.github/scripts/resolve_account.py`) rather than being kept
+as a second hand-maintained secret — a wrong account ID makes every Pages call
+fail with an opaque `404 / code 7003` even when the token is valid.
+
+Only these two repository secrets are required:
+
+| Secret | Where to get it |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Dashboard → My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" template |
+| `CLOUDFLARE_ACCOUNT_ID` | Dashboard → Workers & Pages → Overview → right sidebar "Account ID" |
+
+To check a pasted value before setting it, run `scripts/check-cf-credentials.sh`.
+
+## Tests
+
+```bash
+python3 tests/persistence.test.py       # local: state survives a reload
+python3 tests/deployed-smoke.test.py    # production: the deploy actually works
+```
+
+Both need a running target: `npm run dev` on :5173 for the former, and the
+live URL (overridable via `BASE_URL`) for the latter.
+
+
 ## ✨ Features
 
 ### 1. Blader Registration & 3-on-3 Deck Builder
