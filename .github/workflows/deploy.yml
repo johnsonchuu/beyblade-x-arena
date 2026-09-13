@@ -11,6 +11,8 @@ jobs:
     permissions:
       contents: read
       deployments: write
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -28,12 +30,16 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Resolve Cloudflare account ID
+        env:
+          CF_ACCOUNT_SECRET: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 .github/scripts/resolve_account.py
+
       # Diagnostic only - never fails the job, prints no secret values.
       - name: Diagnose Cloudflare credentials
         continue-on-error: true
         env:
-          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ env.CF_ACCOUNT_RESOLVED }}
         run: python3 .github/scripts/diagnose_cf.py
 
       - name: Ensure Pages project exists
@@ -41,12 +47,12 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: ${{ env.CF_ACCOUNT_RESOLVED }}
           command: pages project create beyblade-x-arena --production-branch=main
 
       - name: Publish to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: ${{ env.CF_ACCOUNT_RESOLVED }}
           command: pages deploy dist --project-name=beyblade-x-arena
