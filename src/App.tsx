@@ -121,8 +121,14 @@ function ptsForFinish(f: FinishType): number {
   }
 }
 
+const EMPTY_STATE: AppState = { players: [], tournaments: [], activeTournamentId: null };
+
 export default function App() {
-  const [state, dispatch] = useReducer(reducer, { players: [], tournaments: [], activeTournamentId: null });
+  // Restore persisted state as the *initial* state. It must be read here rather
+  // than in a mount effect: effects run in declaration order, so a persist
+  // effect declared first would write the empty initial state over the saved
+  // data before a bootstrap effect could read it.
+  const [state, dispatch] = useReducer(reducer, EMPTY_STATE, (fallback) => loadState() ?? fallback);
   const [screen, setScreen] = React.useState<Screen>('registration');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { t, lang, setLang } = useI18n();
@@ -131,14 +137,6 @@ export default function App() {
   useEffect(() => {
     saveState(state);
   }, [state]);
-
-  // Bootstrap from localStorage
-  useEffect(() => {
-    const saved = loadState();
-    if (saved && saved.players.length > 0) {
-      dispatch({ type: 'LOAD_STATE', state: saved });
-    }
-  }, []);
 
   // Derive current tournament
   const activeTournament = state.tournaments.find((t) => t.id === state.activeTournamentId) ?? null;
