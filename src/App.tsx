@@ -125,11 +125,14 @@ function reducer(state: AppState, action: Action): AppState {
     case 'EDIT_MATCH_IN_ARENA': {
       const tournaments = state.tournaments.map((t) => {
         if (t.id !== state.activeTournamentId) return t;
-        const matches = t.matches.map((m) =>
+        let matches = t.matches.map((m) =>
           m.id === action.matchId
             ? { ...m, completed: false, winnerId: null }
             : m
         );
+        if (t.format === 'single-elimination') {
+          matches = resetDownstreamBracketMatches(matches, action.matchId);
+        }
         return { ...t, matches, activeMatchId: action.matchId };
       });
       return { ...state, tournaments };

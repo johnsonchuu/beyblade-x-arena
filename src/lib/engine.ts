@@ -377,7 +377,7 @@ export function resetDownstreamBracketMatches(matches: Match[], sourceMatchId: s
  * Returns null if no such match exists.
  */
 export function getNextReadyMatch(tournament: Tournament): Match | null {
-  return tournament.matches.find((m) => !m.completed && Boolean(m.p1Id) && Boolean(m.p2Id)) ?? null;
+  return tournament.matches.find((m) => m.id !== tournament.activeMatchId && !m.completed && Boolean(m.p1Id) && Boolean(m.p2Id)) ?? null;
 }
 
 /**

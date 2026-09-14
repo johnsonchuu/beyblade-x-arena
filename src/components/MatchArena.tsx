@@ -27,6 +27,13 @@ export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onU
   const [muted, setMuted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [activeFinish, setActiveFinish] = useState<FinishType | null>(null);
+  const [undoFeedback, setUndoFeedback] = useState(false);
+
+  const undoLastRound = (matchId: string) => {
+    onUndoRound(matchId);
+    setUndoFeedback(true);
+    window.setTimeout(() => setUndoFeedback(false), 1500);
+  };
 
   const match: Match | null = tournament?.matches.find((m) => m.id === tournament.activeMatchId) ?? null;
 
@@ -276,13 +283,16 @@ export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onU
 
         {/* Round by round battle log */}
         <div className="mt-4 border-t border-gray-700/60 pt-3 space-y-1.5">
+          {undoFeedback && (
+            <p className="text-[11px] font-mono text-neon animate-pulse">{t('undoToast')}</p>
+          )}
           <div className="text-[10px] text-gray-400 uppercase tracking-widest font-mono flex items-center gap-1 mb-1">
             <Swords size={12} className="text-neon" /> Battle Log
             {match.rounds.length > 0 && !winnerDeclared && (
               <button
                 type="button"
                 className="btn-ghost py-1.5 px-3 text-xs text-danger/90 hover:text-danger hover:bg-danger/10 border-danger/30 flex items-center gap-1.5 rounded-lg transition-colors font-mono ml-auto"
-                onClick={() => onUndoRound(match.id)}
+                onClick={() => undoLastRound(match.id)}
               >
                 <RotateCcw size={14} />
                 <span>{t('undoRound')}</span>
