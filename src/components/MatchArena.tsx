@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Zap, Volume2, VolumeX, Trophy, RotateCcw, Check, Swords, Flag } from 'lucide-react';
 import type { Match, Tournament, Player, FinishType, MatchRound, Bey } from '../lib/types';
 import { playerName } from '../lib/engine';
@@ -24,6 +24,7 @@ export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onC
   const { t } = useI18n();
   const [muted, setMuted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [activeFinish, setActiveFinish] = useState<FinishType | null>(null);
 
   const match: Match | null = tournament?.matches.find((m) => m.id === tournament.activeMatchId) ?? null;
 
@@ -48,6 +49,53 @@ export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onC
 
   const playBeep = () => beep(880);
   const playGo = () => beep(1320, 0.25);
+
+  const playFinishSound = (finish: FinishType) => {
+    if (muted) return;
+    try {
+      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (finish === 'XTREME') {
+        // Heavy pitch drop bass shockwave
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.4);
+        gain.gain.setValueAtTime(0.5, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+      } else if (finish === 'BURST') {
+        // Fast explosive burst
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.4);
+      } else if (finish === 'OVER') {
+        // Ascending whoosh ejection
+        osc.frequency.setValueAtTime(280, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.35, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.35);
+      } else if (finish === 'SPIN') {
+        // High chime
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(660, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.35);
+      }
+    } catch {}
+  };
 
   // Derived
   const totalRounds = match?.rounds.length ?? 0;
@@ -77,6 +125,10 @@ export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onC
   const recordFinish = (finish: FinishType, scorer: 1 | 2 | 0) => {
     if (!match || !tournament) return;
     if (winnerDeclared) return; // locked once decided
+
+    // Trigger sound and finish overlay
+    playFinishSound(finish);
+    setActiveFinish(finish);
 
     // Blind deck-slot selection: use the match's pre-shuffled order for this round.
     // Falls back to a simple rotation for legacy matches saved without an order array.
@@ -269,6 +321,11 @@ export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onC
         </section>
       )}
 
+      {/* Arcade Finish Overlay */}
+      {activeFinish && (
+        <ArcadeFinishOverlay finish={activeFinish} onDismiss={() => setActiveFinish(null)} />
+      )}
+
       {/* Cancel Match */}
       <button className="btn-danger w-full py-3 rounded-xl" onClick={() => confirm(t('cancelConfirm')) && onCancel()}>
         <span className="flex items-center justify-center gap-2">
@@ -346,3 +403,96 @@ function FinishButton({
     </button>
   );
 }
+
+function ArcadeFinishOverlay({
+  finish,
+  onDismiss,
+}: {
+  finish: FinishType;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onDismiss();
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [onDismiss]);
+
+  const configs: Record<
+    FinishType,
+    {
+      text: string;
+      sub: string;
+      color: string;
+      glow: string;
+      bgOverlay: string;
+      border: string;
+    }
+  > = {
+    XTREME: {
+      text: '⚡ XTREME FINISH!',
+      sub: '+3 POINTS',
+      color: 'text-danger',
+      glow: 'rgba(255, 0, 85, 0.8)',
+      bgOverlay: 'from-danger/30 via-red-950/70 to-black/90',
+      border: 'border-danger/60',
+    },
+    BURST: {
+      text: '💥 BURST FINISH!',
+      sub: '+2 POINTS',
+      color: 'text-orange-400',
+      glow: 'rgba(251, 146, 60, 0.8)',
+      bgOverlay: 'from-orange-600/30 via-orange-950/70 to-black/90',
+      border: 'border-orange-500/60',
+    },
+    OVER: {
+      text: '🚀 OVER FINISH!',
+      sub: '+2 POINTS',
+      color: 'text-cyan-400',
+      glow: 'rgba(34, 211, 238, 0.8)',
+      bgOverlay: 'from-cyan-600/30 via-sky-950/70 to-black/90',
+      border: 'border-cyan-400/60',
+    },
+    SPIN: {
+      text: '🌀 SPIN FINISH!',
+      sub: '+1 POINT',
+      color: 'text-emerald-400',
+      glow: 'rgba(52, 211, 153, 0.8)',
+      bgOverlay: 'from-emerald-600/30 via-emerald-950/70 to-black/90',
+      border: 'border-emerald-400/60',
+    },
+    DRAW: {
+      text: '⚔️ DRAW / REPLAY',
+      sub: 'NO POINTS AWARDED',
+      color: 'text-gray-300',
+      glow: 'rgba(209, 213, 219, 0.8)',
+      bgOverlay: 'from-gray-600/30 via-gray-900/70 to-black/90',
+      border: 'border-gray-400/60',
+    },
+  };
+
+  const c = configs[finish];
+
+  return (
+    <div
+      onClick={onDismiss}
+      className={`fixed inset-0 z-[70] flex items-center justify-center cursor-pointer bg-gradient-to-b ${c.bgOverlay} backdrop-blur-md animate-screen-rumble select-none`}
+    >
+      <div className={`text-center p-8 rounded-2xl border-2 ${c.border} bg-black/60 shadow-2xl animate-flash-burst mx-4 max-w-lg w-full`}>
+        <h1
+          className={`text-3xl md:text-5xl font-black uppercase tracking-wider font-heading ${c.color} drop-shadow-lg`}
+          style={{ textShadow: `0 0 30px ${c.glow}, 0 0 60px ${c.glow}` }}
+        >
+          {c.text}
+        </h1>
+        <p
+          className="text-white text-lg md:text-xl font-mono font-bold mt-2 tracking-widest uppercase opacity-90"
+        >
+          {c.sub}
+        </p>
+        <p className="text-gray-400 text-xs font-mono mt-4 opacity-60">Click anywhere to skip</p>
+      </div>
+    </div>
+  );
+}
+
