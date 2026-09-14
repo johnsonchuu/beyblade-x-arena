@@ -246,6 +246,32 @@ export default function App() {
     }
   };
 
+  const handleProceedToNextMatch = (
+    matchId: string,
+    p1Score: number,
+    p2Score: number,
+    winnerId: string | null
+  ) => {
+    dispatch({ type: 'FINISH_MATCH', matchId, p1Score, p2Score, winnerId });
+    const tournament = activeTournament;
+    if (!tournament) {
+      setScreen('dashboard');
+      return;
+    }
+    const updatedMatches = tournament.matches.map((m) =>
+      m.id === matchId
+        ? { ...m, completed: true, winnerId, p1Score, p2Score }
+        : m
+    );
+    const next = updatedMatches.find((m) => !m.completed && Boolean(m.p1Id) && Boolean(m.p2Id)) ?? null;
+    if (next) {
+      dispatch({ type: 'START_MATCH', matchId: next.id });
+      setScreen('arena');
+    } else {
+      setScreen('dashboard');
+    }
+  };
+
   const renderScreen = () => {
     switch (screen) {
       case 'registration':
@@ -285,6 +311,8 @@ export default function App() {
             tournament={activeTournament}
             players={state.players}
             onRecordRound={(matchId, round) => dispatch({ type: 'RECORD_ROUND', matchId, round })}
+            onUndoRound={(matchId) => dispatch({ type: 'UNDO_ROUND', matchId })}
+            onProceedToNextMatch={handleProceedToNextMatch}
             onFinishMatch={(matchId, p1Score, p2Score, winnerId) => {
               dispatch({ type: 'FINISH_MATCH', matchId, p1Score, p2Score, winnerId });
               setScreen('dashboard');

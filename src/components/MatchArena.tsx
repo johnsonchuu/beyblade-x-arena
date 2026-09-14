@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Zap, Volume2, VolumeX, Trophy, RotateCcw, Check, Swords, Flag } from 'lucide-react';
 import type { Match, Tournament, Player, FinishType, MatchRound, Bey } from '../lib/types';
-import { playerName } from '../lib/engine';
+import { playerName, getNextReadyMatch } from '../lib/engine';
 import { useI18n } from '../lib/i18n';
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   players: Player[];
   onRecordRound: (matchId: string, round: MatchRound) => void;
   onFinishMatch: (matchId: string, p1Score: number, p2Score: number, winnerId: string | null) => void;
+  onUndoRound: (matchId: string) => void;
+  onProceedToNextMatch: (matchId: string, p1Score: number, p2Score: number, winnerId: string | null) => void;
   onCancel: () => void;
 }
 
@@ -20,7 +22,7 @@ const FINISH_KEY: Record<FinishType, 'finishSPIN' | 'finishOVER' | 'finishBURST'
   DRAW: 'finishDRAW',
 };
 
-export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onCancel }: Props) {
+export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onUndoRound, onProceedToNextMatch, onCancel }: Props) {
   const { t } = useI18n();
   const [muted, setMuted] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -163,6 +165,19 @@ export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onC
     onFinishMatch(match.id, match.p1Score, match.p2Score, winnerId);
   };
 
+  // Winner ID derived the same way as finishMatch, used for banner navigation buttons
+  const winnerIdForNextBanner = (() => {
+    if (!match) return null;
+    if (target !== null) {
+      if (match.p1Score >= target) return match.p1Id;
+      if (match.p2Score >= target) return match.p2Id;
+      return null;
+    }
+    if (match.p1Score > match.p2Score) return match.p1Id;
+    if (match.p2Score > match.p1Score) return match.p2Id;
+    return null;
+  })();
+
   if (!match || !tournament) {
     return (
       <div className="panel p-8 text-center">
@@ -263,6 +278,16 @@ export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onC
         <div className="mt-4 border-t border-gray-700/60 pt-3 space-y-1.5">
           <div className="text-[10px] text-gray-400 uppercase tracking-widest font-mono flex items-center gap-1 mb-1">
             <Swords size={12} className="text-neon" /> Battle Log
+            {match.rounds.length > 0 && !winnerDeclared && (
+              <button
+                type="button"
+                className="btn-ghost py-1.5 px-3 text-xs text-danger/90 hover:text-danger hover:bg-danger/10 border-danger/30 flex items-center gap-1.5 rounded-lg transition-colors font-mono ml-auto"
+                onClick={() => onUndoRound(match.id)}
+              >
+                <RotateCcw size={14} />
+                <span>{t('undoRound')}</span>
+              </button>
+            )}
           </div>
           {match.rounds.length === 0 ? (
             <p className="text-gray-500 text-xs font-mono">{t('noRoundsYet')}</p>
@@ -317,6 +342,31 @@ export function MatchArenaScreen({ tournament, onRecordRound, onFinishMatch, onC
               <Check size={18} /> {t('recordResult')}
             </span>
           </button>
+          {(() => {
+            const next = getNextReadyMatch(tournament);
+            return (
+              <div className="mt-2 pt-3 border-t border-gray-700/60 space-y-2">
+                {next && (
+                  <button
+                    type="button"
+                    className="btn-primary w-full py-3 text-sm tracking-wider"
+                    onClick={() => onProceedToNextMatch(match.id, match.p1Score, match.p2Score, winnerIdForNextBanner)}
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      <Check size={16} /> {t('proceedNextMatch', { n: next.round })}
+                    </span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-ghost w-full py-2.5 text-xs tracking-wider"
+                  onClick={() => onProceedToNextMatch(match.id, match.p1Score, match.p2Score, winnerIdForNextBanner)}
+                >
+                  {t('returnToTourney')}
+                </button>
+              </div>
+            );
+          })()}
           </div>
         </section>
       )}
