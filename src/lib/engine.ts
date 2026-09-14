@@ -1,9 +1,25 @@
-import type { Match, Player, Format } from './types';
+import type { Match, Player, Format, FinishType, Tournament } from './types';
 
 export const TARGET_SCORE_OPTIONS = [4, 5, 6, 7];
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+/** Points awarded for a given finish type. */
+export function ptsForFinish(f: FinishType): number {
+  switch (f) {
+    case 'SPIN':
+      return 1;
+    case 'BURST':
+    case 'OVER':
+      return 2;
+    case 'XTREME':
+      return 3;
+    case 'DRAW':
+    default:
+      return 0;
+  }
 }
 
 /** Stadium-style standings row. */
@@ -322,6 +338,89 @@ export function advanceBracketWinner(matches: Match[], completedMatchId: string,
 
   return updated;
 }
+
+/**
+ * Reset a completed bracket match and recursively clear all downstream matches
+ * that were fed by it (finals, 3rd-place feeds, etc.).
+ */
+export function resetDownstreamBracketMatches(matches: Match[], sourceMatchId: string): Match[] {
+  let updated = [...matches];
+  const source = updated.find((m) => m.id === sourceMatchId);
+  if (!source) return updated;
+
+  // Clear winner and completion of source
+  updated = updated.map((m) => (m.id === sourceMatchId ? { ...m, completed: false, winnerId: null } : m));
+
+  const targetMatchIds: string[] = [];
+  if (source.bracketNextMatchId) targetMatchIds.push(source.bracketNextMatchId);
+  const thirdFeed = thirdPlaceFeed.find((f) => f.from === sourceMatchId);
+  if (thirdFeed) targetMatchIds.push(thirdFeed.to);
+
+  for (const targetId of targetMatchIds) {
+    const target = updated.find((m) => m.id === targetId);
+    if (!target) continue;
+    // Clear slot in target
+    const slot = source.bracketSlot ?? 1;
+    updated = updated.map((m) => {
+      if (m.id !== targetId) return m;
+      return slot === 1 ? { ...m, p1Id: '', completed: false, winnerId: null, rounds: [], p1Score: 0, p2Score: 0 }
+                        : { ...m, p2Id: '', completed: false, winnerId: null, rounds: [], p1Score: 0, p2Score: 0 };
+    });
+    // Recursively clear downstream of the target
+    updated = resetDownstreamBracketMatches(updated, targetId);
+  }
+  return updated;
+}
+
+/**
+ * Find the first uncompleted match that has both players populated.
+ * Returns null if no such match exists.
+ */
+export function getNextReadyMatch(tournament: Tournament): Match | null {
+  return tournament.matches.find((m) => !m.completed && Boolean(m.p1Id) && Boolean(m.p2Id)) ?? null;
+}
+
+/**
+ * Pre-built sample roster for quick testing/demo tournaments.
+ */
+export const SAMPLE_ROSTER: Player[] = [
+  {
+    id: 'sample-1',
+    name: 'Kamen X',
+    deck: [
+      { id: 'bx-1', blade: 'Dran Buster', ratchet: '1-60A', bit: 'Accel' },
+      { id: 'bx-2', blade: 'Dran Dagger', ratchet: '4-60R', bit: 'Rush' },
+      { id: 'bx-3', blade: 'Dran Sword', ratchet: '3-60F', bit: 'Flat' },
+    ],
+  },
+  {
+    id: 'sample-2',
+    name: 'Multi Nanairo',
+    deck: [
+      { id: 'ux-1', blade: 'Wizard Rod', ratchet: '5-70DB', bit: 'Ball' },
+      { id: 'ux-2', blade: 'Knight Mail', ratchet: '3-85BS', bit: 'Bound Spike' },
+      { id: 'ux-3', blade: 'Viper Tail', ratchet: '5-80O', bit: 'Orb' },
+    ],
+  },
+  {
+    id: 'sample-3',
+    name: 'Bird Kazami',
+    deck: [
+      { id: 'bx-4', blade: 'Hells Chain', ratchet: '5-60HT', bit: 'High Taper' },
+      { id: 'bx-5', blade: 'Hells Scythe', ratchet: '4-60T', bit: 'Taper' },
+      { id: 'bx-6', blade: 'Hells Hammer', ratchet: '3-70H', bit: 'Hexa' },
+    ],
+  },
+  {
+    id: 'sample-4',
+    name: 'Chrome Ryugu',
+    deck: [
+      { id: 'cx-1', blade: 'Cobalt Dragoon', ratchet: '2-60C', bit: 'Cyclone' },
+      { id: 'cx-2', blade: 'Phoenix Wing', ratchet: '9-60GF', bit: 'Gear Flat' },
+      { id: 'cx-3', blade: 'Shark Edge', ratchet: '3-60LF', bit: 'Low Flat' },
+    ],
+  },
+];
 
 /**
  * Swiss pairings based on current standings and match history.

@@ -3,6 +3,9 @@ import {
   roundRobinMatches,
   bracketMatches,
   advanceBracketWinner,
+  resetDownstreamBracketMatches,
+  getNextReadyMatch,
+  SAMPLE_ROSTER,
   swissRound,
   computeStandings,
   shuffleDeckOrder,
@@ -165,6 +168,54 @@ console.log('--- Testing Beyblade Engine ---');
   const round2 = swissRound(players, round1, 2);
   assert(round2.length === 2, `Swiss round 2 should have 2 pairings, got ${round2.length}`);
   console.log('✓ Swiss pairings pass.');
+}
+
+// 6. Test Bracket Downstream Reset and Ready Match Query
+{
+  console.log('6. Testing resetDownstreamBracketMatches and getNextReadyMatch...');
+  const players = [
+    makePlayer('p1', 'A'),
+    makePlayer('p2', 'B'),
+    makePlayer('p3', 'C'),
+    makePlayer('p4', 'D'),
+  ];
+  let matches = bracketMatches(players, true);
+  const semi1 = matches[0];
+  matches = advanceBracketWinner(matches, semi1.id, semi1.p1Id);
+  const finalBefore = matches.find((m) => m.bracketRound === 2)!;
+  assert(finalBefore.p1Id === semi1.p1Id, 'Final should have semi 1 winner');
+
+  // Reset semi 1
+  matches = resetDownstreamBracketMatches(matches, semi1.id);
+  const finalAfter = matches.find((m) => m.bracketRound === 2)!;
+  assert(finalAfter.p1Id === '', 'Final should have cleared p1Id after reset');
+
+  // Test getNextReadyMatch
+  const nextReady = getNextReadyMatch({
+    id: 't1',
+    name: 'Test',
+    format: 'single-elimination',
+    targetScore: 4,
+    createdAt: Date.now(),
+    players,
+    matches,
+    activeMatchId: null,
+  });
+  assert(nextReady !== null && nextReady.p1Id !== '' && nextReady.p2Id !== '', 'Should find a ready match');
+  console.log('✓ Bracket reset and next ready match helpers pass.');
+}
+
+// 7. Test SAMPLE_ROSTER
+{
+  console.log('7. Testing SAMPLE_ROSTER...');
+  assert(SAMPLE_ROSTER.length === 4, `Expected 4 sample players, got ${SAMPLE_ROSTER.length}`);
+  SAMPLE_ROSTER.forEach((p) => {
+    assert(p.deck.length === 3, `Player ${p.name} should have 3 beys in deck`);
+    p.deck.forEach((b) => {
+      assert(b.blade !== '' && b.ratchet !== '' && b.bit !== '', 'Bey parts should not be empty');
+    });
+  });
+  console.log('✓ Sample roster passes.');
 }
 
 console.log('ALL ENGINE TESTS PASSED SUCCESSFULLY! 🚀');
