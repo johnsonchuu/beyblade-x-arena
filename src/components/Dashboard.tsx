@@ -1,17 +1,29 @@
-import { Swords, PlayCircle, Trophy, BarChart3, RefreshCw, Layers, UserCheck, Radio, Zap } from 'lucide-react';
-import type { Match, Tournament, Player } from '../lib/types';
-import { computeStandings, playerName, formatLabel, getNextReadyMatch } from '../lib/engine';
+import { useState } from 'react';
+import { Swords, PlayCircle, Trophy, BarChart3, RefreshCw, Layers, UserCheck, Radio, Zap, RotateCcw, Wrench, X } from 'lucide-react';
+import type { Match, Tournament, Player, FinishType } from '../lib/types';
+import { computeStandings, playerName, formatLabel, getNextReadyMatch, ptsForFinish } from '../lib/engine';
 import { useI18n } from '../lib/i18n';
 
 interface Props {
   tournament: Tournament | null;
   onGenerateMatches: () => void;
   onStartMatch: (matchId: string) => void;
+  onReplayMatch: (matchId: string) => void;
+  onEditMatchInArena: (matchId: string) => void;
   onScreenChange: (s: 'analytics') => void;
 }
 
-export function DashboardScreen({ tournament, onGenerateMatches, onStartMatch, onScreenChange }: Props) {
+const FINISH_SHORT: Record<FinishType, string> = {
+  SPIN: 'Spin',
+  OVER: 'Over',
+  BURST: 'Burst',
+  XTREME: 'Xtreme',
+  DRAW: 'Draw',
+};
+
+export function DashboardScreen({ tournament, onGenerateMatches, onStartMatch, onReplayMatch, onEditMatchInArena, onScreenChange }: Props) {
   const { t } = useI18n();
+  const [selectedCompletedMatch, setSelectedCompletedMatch] = useState<Match | null>(null);
   if (!tournament) {
     return (
       <div className="panel p-8 text-center space-y-4">
@@ -223,10 +235,29 @@ export function DashboardScreen({ tournament, onGenerateMatches, onStartMatch, o
                 match={m}
                 tournament={tournament}
                 onStart={() => onStartMatch(m.id)}
+                onSelectCompleted={() => setSelectedCompletedMatch(m)}
               />
             ))}
           </div>
         </section>
+      )}
+
+      {/* Match Summary & Actions Modal */}
+      {selectedCompletedMatch && (
+        <MatchSummaryModal
+          match={selectedCompletedMatch}
+          matchIndex={tournament.matches.findIndex((m) => m.id === selectedCompletedMatch.id) + 1}
+          tournament={tournament}
+          onReplay={() => {
+            onReplayMatch(selectedCompletedMatch.id);
+            setSelectedCompletedMatch(null);
+          }}
+          onEdit={() => {
+            onEditMatchInArena(selectedCompletedMatch.id);
+            setSelectedCompletedMatch(null);
+          }}
+          onClose={() => setSelectedCompletedMatch(null)}
+        />
       )}
 
       {/* Button to navigate to social share card / meta stats */}
@@ -245,12 +276,14 @@ function MatchCard({
   isNextReady,
   tournament,
   onStart,
+  onSelectCompleted,
 }: {
   match: Match;
   matchIndex: number;
   isNextReady: boolean;
   tournament: Tournament;
   onStart: () => void;
+  onSelectCompleted: () => void;
 }) {
   const { t } = useI18n();
   const p1 = playerName(tournament.players, match.p1Id);
@@ -277,7 +310,9 @@ function MatchCard({
   return (
     <div
       onClick={() => {
-        if (isReady) {
+        if (match.completed) {
+          onSelectCompleted();
+        } else if (isReady) {
           onStart();
         }
       }}
@@ -338,6 +373,139 @@ function MatchCard({
             </span>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function MatchSummaryModal({
+  match,
+  matchIndex,
+  tournament,
+  onReplay,
+  onEdit,
+  onClose,
+}: {
+  match: Match;
+  matchIndex: number;
+  tournament: Tournament;
+  onReplay: () => void;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const p1 = playerName(tournament.players, match.p1Id);
+  const p2 = playerName(tournament.players, match.p2Id);
+  const p1IsWinner = match.winnerId === match.p1Id;
+  const p2IsWinner = match.winnerId === match.p2Id;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="panel w-full max-w-md max-h-[90vh] overflow-y-auto border border-neon/40 shadow-glow rounded-2xl p-5 space-y-4 relative">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="space-y-1">
+            <p className="text-[11px] font-mono uppercase tracking-widest text-gray-400">
+              {t('matchNumShort', { n: matchIndex })} · {t('roundTitle', { r: match.round })}
+            </p>
+            <h3 className="text-lg font-bold font-heading text-white">
+              {p1} <span className="text-danger text-sm mx-1">VS</span> {p2}
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+            aria-label={t('close')}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Final Score */}
+        <div className="bg-black/40 rounded-xl border border-gray-800 p-4 text-center">
+          <p className="text-xs font-mono uppercase tracking-widest text-gray-400 mb-2">
+            {t('matchSummary')}
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            <span className={`text-2xl font-bold font-mono ${p1IsWinner ? 'text-gold' : 'text-white'}`}>
+              {match.p1Score}
+            </span>
+            <span className="text-gray-500 font-mono text-lg">–</span>
+            <span className={`text-2xl font-bold font-mono ${p2IsWinner ? 'text-gold' : 'text-white'}`}>
+              {match.p2Score}
+            </span>
+          </div>
+          {match.winnerId && (
+            <p className="mt-2 text-sm font-heading font-bold text-gold">
+              🏆 {p1IsWinner ? p1 : p2}
+            </p>
+          )}
+        </div>
+
+        {/* Round-by-round breakdown */}
+        {match.rounds.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-mono uppercase tracking-widest text-gray-400">
+              {t('countRounds', { n: match.rounds.length })}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {match.rounds.map((r, i) => {
+                const winnerLabel =
+                  r.winnerId === match.p1Id
+                    ? 'P1'
+                    : r.winnerId === match.p2Id
+                      ? 'P2'
+                      : 'Draw';
+                const pts = ptsForFinish(r.finish);
+                return (
+                  <span
+                    key={i}
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono font-bold border
+                      ${r.winnerId === match.p1Id
+                        ? 'bg-neon/10 text-neon border-neon/40'
+                        : r.winnerId === match.p2Id
+                          ? 'bg-danger/10 text-danger border-danger/40'
+                          : 'bg-gray-700/50 text-gray-400 border-gray-600'
+                      }`}
+                  >
+                    R{i + 1}: {FINISH_SHORT[r.finish]} (+{pts}) - {winnerLabel}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-col gap-2 pt-2 border-t border-gray-800">
+          <button
+            onClick={() => {
+              if (confirm(t('replayConfirm'))) {
+                onReplay();
+              }
+            }}
+            className="btn-primary w-full py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 font-heading text-sm tracking-wider"
+          >
+            <RotateCcw size={16} /> {t('replayMatch')}
+          </button>
+          <button
+            onClick={onEdit}
+            className="btn-ghost w-full py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 font-heading text-sm tracking-wider"
+          >
+            <Wrench size={16} /> {t('editInArena')}
+          </button>
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 px-4 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors font-heading text-sm tracking-wider"
+          >
+            {t('close')}
+          </button>
+        </div>
       </div>
     </div>
   );

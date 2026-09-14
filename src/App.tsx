@@ -268,6 +268,14 @@ export default function App() {
               dispatch({ type: 'START_MATCH', matchId });
               setScreen('arena');
             }}
+            onReplayMatch={(matchId) => {
+              dispatch({ type: 'REPLAY_MATCH', matchId });
+              setScreen('arena');
+            }}
+            onEditMatchInArena={(matchId) => {
+              dispatch({ type: 'EDIT_MATCH_IN_ARENA', matchId });
+              setScreen('arena');
+            }}
             onScreenChange={setScreen}
           />
         );
