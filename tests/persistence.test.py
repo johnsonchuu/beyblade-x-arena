@@ -100,7 +100,7 @@ with sync_playwright() as p:
 
     for name in ("BladerOne", "BladerTwo"):
         page.fill("input[placeholder*='選手名稱']", name)
-        page.locator("button", has_text="加入選手及卡組").click()
+        page.locator("button", has_text="加入選手").click()
         time.sleep(0.4)
 
     page.locator("button", has_text="開始賽事").click()

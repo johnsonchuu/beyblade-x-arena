@@ -1,7 +1,7 @@
 import React from 'react';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import type { AppState, Player, Tournament, Format, Match, MatchRound, FinishType } from './lib/types';
-import { uid, roundRobinMatches, bracketMatches } from './lib/engine';
+import { uid, roundRobinMatches, bracketMatches, advanceBracketWinner, swissRound } from './lib/engine';
 import { loadState, saveState, clearState, exportJson, importJson } from './lib/storage';
 import { RegistrationScreen } from './components/Registration';
 import { DashboardScreen } from './components/Dashboard';
@@ -16,7 +16,7 @@ type Action =
   | { type: 'SET_PLAYERS'; players: Player[] }
   | { type: 'ADD_PLAYER'; player: Player }
   | { type: 'REMOVE_PLAYER'; id: string }
-  | { type: 'CREATE_TOURNAMENT'; name: string; format: Format; targetScore: number }
+  | { type: 'CREATE_TOURNAMENT'; name: string; format: Format; targetScore: number | null }
   | { type: 'SET_ACTIVE_TOURNAMENT'; id: string | null }
   | { type: 'START_MATCH'; matchId: string }
   | { type: 'RECORD_ROUND'; matchId: string; round: MatchRound }
@@ -77,12 +77,16 @@ function reducer(state: AppState, action: Action): AppState {
     case 'FINISH_MATCH': {
       const tournaments = state.tournaments.map((t) => {
         if (t.id !== state.activeTournamentId) return t;
-        const matches = t.matches.map((m) =>
+        let updatedMatches = t.matches.map((m) =>
           m.id === action.matchId
             ? { ...m, completed: true, winnerId: action.winnerId, p1Score: action.p1Score, p2Score: action.p2Score }
             : m
         );
-        return { ...t, matches, activeMatchId: null };
+        // If single elimination, automatically propagate winner to the next round bracket match
+        if (t.format === 'single-elimination') {
+          updatedMatches = advanceBracketWinner(updatedMatches, action.matchId, action.winnerId);
+        }
+        return { ...t, matches: updatedMatches, activeMatchId: null };
       });
       return { ...state, tournaments };
     }
@@ -116,6 +120,7 @@ function ptsForFinish(f: FinishType): number {
       return 2;
     case 'XTREME':
       return 3;
+    case 'DRAW':
     default:
       return 0;
   }
@@ -124,10 +129,6 @@ function ptsForFinish(f: FinishType): number {
 const EMPTY_STATE: AppState = { players: [], tournaments: [], activeTournamentId: null };
 
 export default function App() {
-  // Restore persisted state as the *initial* state. It must be read here rather
-  // than in a mount effect: effects run in declaration order, so a persist
-  // effect declared first would write the empty initial state over the saved
-  // data before a bootstrap effect could read it.
   const [state, dispatch] = useReducer(reducer, EMPTY_STATE, (fallback) => loadState() ?? fallback);
   const [screen, setScreen] = React.useState<Screen>('registration');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -142,7 +143,7 @@ export default function App() {
   const activeTournament = state.tournaments.find((t) => t.id === state.activeTournamentId) ?? null;
 
   const handleStartTournament = useCallback(
-    (name: string, format: Format, targetScore: number) => {
+    (name: string, format: Format, targetScore: number | null) => {
       dispatch({ type: 'CREATE_TOURNAMENT', name, format, targetScore });
       setScreen('dashboard');
     },
@@ -153,14 +154,26 @@ export default function App() {
     if (!activeTournament) return;
     let matches: Match[];
     const t = activeTournament;
+
     if (t.format === 'round-robin') {
       matches = roundRobinMatches(t.players);
     } else if (t.format === 'single-elimination') {
       matches = bracketMatches(t.players, true);
+    } else if (t.format === 'swiss') {
+      // If no matches yet, generate round 1
+      if (t.matches.length === 0) {
+        matches = swissRound(t.players, [], 1);
+      } else {
+        // Generate next round based on previous completed rounds
+        const maxRound = Math.max(...t.matches.map((m) => m.round), 0);
+        const nextRoundMatches = swissRound(t.players, t.matches, maxRound + 1);
+        matches = [...t.matches, ...nextRoundMatches];
+      }
     } else {
       matches = [];
     }
-    // Commit matches to tournament (simplified: replace state)
+
+    // Commit matches to tournament
     const tournaments = state.tournaments.map((ot) => {
       if (ot.id !== t.id) return ot;
       return { ...ot, matches };
@@ -235,44 +248,44 @@ export default function App() {
       case 'settings':
         return (
           <div className="panel p-6 space-y-6">
-            <h2 className="text-xl font-bold text-neon tracking-wider uppercase">{t('settingsTitle')}</h2>
+            <h2 className="text-xl font-bold text-neon tracking-wider uppercase font-heading">{t('settingsTitle')}</h2>
             <div className="flex items-center gap-2 border-b border-gray-700 pb-4">
               <Languages size={18} className="text-gray-400" />
-              <span className="text-sm text-gray-400">{t('language')}:</span>
+              <span className="text-sm text-gray-400 font-mono">{t('language')}:</span>
               <button
-                className={`btn-ghost text-xs py-1 px-3 ${lang === 'en' ? 'border-neon text-neon' : ''}`}
+                className={`btn-ghost text-xs py-1.5 px-3 rounded-lg ${lang === 'en' ? 'border-neon text-neon' : ''}`}
                 onClick={() => setLang('en')}
               >
                 English
               </button>
               <button
-                className={`btn-ghost text-xs py-1 px-3 ${lang === 'zh' ? 'border-neon text-neon' : ''}`}
+                className={`btn-ghost text-xs py-1.5 px-3 rounded-lg ${lang === 'zh' ? 'border-neon text-neon' : ''}`}
                 onClick={() => setLang('zh')}
               >
                 中文
               </button>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button className="btn-ghost flex items-center gap-2" onClick={handleExport}>
+              <button className="btn-ghost flex items-center gap-2 py-2 px-4 rounded-xl" onClick={handleExport}>
                 <Download size={18} /> {t('exportJson')}
               </button>
-              <button className="btn-ghost flex items-center gap-2" onClick={() => fileInputRef.current?.click()}>
+              <button className="btn-ghost flex items-center gap-2 py-2 px-4 rounded-xl" onClick={() => fileInputRef.current?.click()}>
                 <Upload size={18} /> {t('importJson')}
               </button>
               <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
-              <button className="btn-danger flex items-center gap-2" onClick={handleReset}>
+              <button className="btn-danger flex items-center gap-2 py-2 px-4 rounded-xl" onClick={handleReset}>
                 <Trash2 size={18} /> {t('resetAll')}
               </button>
             </div>
             {state.tournaments.length > 0 && (
               <div className="border-t border-gray-700 pt-6">
-                <h3 className="text-sm uppercase tracking-wider text-gray-400 mb-3">{t('savedTournaments')}</h3>
+                <h3 className="text-sm uppercase tracking-wider text-gray-400 mb-3 font-mono">{t('savedTournaments')}</h3>
                 <div className="space-y-2">
                   {state.tournaments.map((tr) => (
-                    <div key={tr.id} className="flex items-center gap-3 text-sm">
-                      <span className="flex-1 text-gray-200">{tr.name}</span>
+                    <div key={tr.id} className="flex items-center gap-3 text-sm p-2 rounded-lg bg-black/20 border border-gray-800">
+                      <span className="flex-1 text-gray-200 font-medium">{tr.name}</span>
                       <button
-                        className="btn-ghost text-xs py-1 px-3"
+                        className="btn-ghost text-xs py-1 px-3 rounded"
                         onClick={() => {
                           dispatch({ type: 'SET_ACTIVE_TOURNAMENT', id: tr.id });
                           setScreen('dashboard');
@@ -281,7 +294,7 @@ export default function App() {
                         {t('switch')}
                       </button>
                       <button
-                        className="text-danger text-xs hover:underline"
+                        className="text-danger text-xs hover:underline px-2"
                         onClick={() => {
                           if (confirm(t('deleteConfirm', { name: tr.name }))) {
                             dispatch({ type: 'DELETE_TOURNAMENT', id: tr.id });
@@ -303,21 +316,21 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col items-center px-3 py-4 pb-24">
+    <div className="min-h-screen bg-bg flex flex-col items-center px-3 py-4 pb-32">
       {/* Header */}
-      <header className="w-full max-w-2xl text-center mb-4">
-        <h1 className="text-2xl sm:text-3xl font-bold text-neon tracking-widest uppercase" style={{ textShadow: '0 0 10px rgba(0,255,204,0.5)' }}>
+      <header className="w-full max-w-2xl text-center mb-4 pt-1">
+        <h1 className="text-2xl sm:text-3xl font-black text-neon tracking-widest uppercase font-heading" style={{ textShadow: '0 0 15px rgba(0,255,204,0.6)' }}>
           {t('appTitle')}
         </h1>
-        <p className="text-gray-500 text-xs tracking-wider mt-1">{t('appSubtitle')}</p>
+        <p className="text-gray-400 text-xs tracking-wider mt-1 font-mono uppercase">{t('appSubtitle')}</p>
       </header>
 
       {/* Main content */}
       <main className="w-full max-w-2xl">{renderScreen()}</main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-panel border-t border-gray-700/80 z-50">
-        <div className="max-w-2xl mx-auto flex items-center justify-around h-14">
+      <nav className="fixed bottom-0 left-0 right-0 bg-panel/95 backdrop-blur-md border-t border-gray-700/80 z-50 shadow-2xl">
+        <div className="max-w-2xl mx-auto flex items-center justify-around h-15 py-1">
           {[
             { id: 'registration' as Screen, icon: Plus, label: t('navRegister') },
             { id: 'dashboard' as Screen, icon: Swords, label: t('navTourney') },
@@ -326,19 +339,18 @@ export default function App() {
             { id: 'settings' as Screen, icon: Settings, label: t('navSettings') },
           ].map((tab) => {
             const active = screen === tab.id;
-            // Only enable arena if there is an active match
             const disabled = tab.id === 'arena' && !activeTournament?.activeMatchId;
             return (
               <button
                 key={tab.id}
                 disabled={disabled}
-                className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors
-                  ${active ? 'text-neon' : disabled ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-gray-200'}
+                className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all
+                  ${active ? 'text-neon font-bold scale-105' : disabled ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-gray-200'}
                 `}
                 onClick={() => setScreen(tab.id)}
               >
-                <tab.icon size={18} />
-                <span className="text-[10px] uppercase tracking-widest">{tab.label}</span>
+                <tab.icon size={19} className={active ? 'text-neon animate-pulse' : ''} />
+                <span className="text-[10px] uppercase tracking-widest font-mono">{tab.label}</span>
               </button>
             );
           })}

@@ -57,7 +57,7 @@ with sync_playwright() as p:
 
     # Registration, with the deck left empty on purpose: decks are optional.
     page.fill("input[placeholder*='選手名稱']", "PersistCheck")
-    page.locator("button", has_text="加入選手及卡組").click()
+    page.locator("button", has_text="加入選手").click()
     time.sleep(1)
     check("registration works on live site", page.locator("h3", has_text="PersistCheck").count() > 0)
 

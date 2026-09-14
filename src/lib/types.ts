@@ -36,6 +36,8 @@ export interface Match {
   completed: boolean;
   /** for brackets: path/bracket bookkeeping */
   bracketRound?: number;
+  bracketNextMatchId?: string;
+  bracketSlot?: 1 | 2;
 }
 
 export interface MatchRound {
@@ -51,7 +53,7 @@ export interface Tournament {
   id: string;
   name: string;
   format: Format;
-  targetScore: number;
+  targetScore: number | null; // null = open / free play (no target limit)
   createdAt: number;
   players: Player[];
   matches: Match[];
