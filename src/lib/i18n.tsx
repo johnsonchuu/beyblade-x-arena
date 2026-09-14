@@ -135,7 +135,7 @@ const dict = {
   close: { zh: '關閉', en: 'Close' },
   undoRound: { zh: '撤銷上一回合', en: 'Undo Last Round' },
   undoToast: { zh: '已撤銷上一回合得分', en: 'Last round reverted' },
-  proceedNextMatch: { zh: '接續下一場比賽 →', en: 'Proceed to Next Match →' },
+  proceedNextMatch: { zh: '接續下一場比賽（第 {n} 輪）→', en: 'Proceed to Next Match #{n} →' },
   returnToTourney: { zh: '返回賽事主頁', en: 'Back to Tournament' },
   podiumTitle: { zh: '🏆 冠軍頒獎台', en: '🏆 Tournament Champions' },
   podiumSubtitle: { zh: '恭喜所有奮戰至終點的陀螺陀手！', en: 'Congratulations to all competing bladers!' },

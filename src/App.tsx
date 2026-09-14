@@ -258,11 +258,16 @@ export default function App() {
       setScreen('dashboard');
       return;
     }
-    const updatedMatches = tournament.matches.map((m) =>
+    // Mirror the FINISH_MATCH reducer locally (including bracket advancement)
+    // so the next-match lookup reflects single-elim downstream matches becoming ready.
+    let updatedMatches = tournament.matches.map((m) =>
       m.id === matchId
         ? { ...m, completed: true, winnerId, p1Score, p2Score }
         : m
     );
+    if (tournament.format === 'single-elimination') {
+      updatedMatches = advanceBracketWinner(updatedMatches, matchId, winnerId);
+    }
     const next = updatedMatches.find((m) => !m.completed && Boolean(m.p1Id) && Boolean(m.p2Id)) ?? null;
     if (next) {
       dispatch({ type: 'START_MATCH', matchId: next.id });
