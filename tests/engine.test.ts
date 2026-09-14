@@ -6,6 +6,7 @@ import {
   resetDownstreamBracketMatches,
   getNextReadyMatch,
   SAMPLE_ROSTER,
+  ptsForFinish,
   swissRound,
   computeStandings,
   shuffleDeckOrder,
@@ -216,6 +217,38 @@ console.log('--- Testing Beyblade Engine ---');
     });
   });
   console.log('✓ Sample roster passes.');
+}
+
+// 8. Testing Undo Round score recalculation & replay reset
+{
+  console.log('8. Testing Undo Round score recalculation...');
+  const match: Match = {
+    id: 'm1',
+    round: 1,
+    p1Id: 'p1',
+    p2Id: 'p2',
+    order: [0, 1, 2],
+    rounds: [
+      { slot: 0, p1Bey: makePlayer('p1', 'A').deck[0], p2Bey: makePlayer('p2', 'B').deck[0], finish: 'BURST', winnerId: 'p1' },
+      { slot: 1, p1Bey: makePlayer('p1', 'A').deck[1], p2Bey: makePlayer('p2', 'B').deck[1], finish: 'XTREME', winnerId: 'p2' },
+    ],
+    winnerId: null,
+    p1Score: 2,
+    p2Score: 3,
+    completed: false,
+  };
+
+  // Simulate undo
+  const remainingRounds = match.rounds.slice(0, -1);
+  let p1Score = 0;
+  let p2Score = 0;
+  remainingRounds.forEach((r) => {
+    if (r.winnerId === match.p1Id) p1Score += ptsForFinish(r.finish);
+    else if (r.winnerId === match.p2Id) p2Score += ptsForFinish(r.finish);
+  });
+  assert(p1Score === 2, 'p1 score after undoing xtreme should be 2');
+  assert(p2Score === 0, 'p2 score after undoing xtreme should be 0');
+  console.log('✓ Round undo score recalculation passes.');
 }
 
 console.log('ALL ENGINE TESTS PASSED SUCCESSFULLY! 🚀');

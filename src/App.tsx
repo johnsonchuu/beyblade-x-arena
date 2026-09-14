@@ -1,7 +1,16 @@
 import React from 'react';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
-import type { AppState, Player, Tournament, Format, Match, MatchRound, FinishType } from './lib/types';
-import { uid, roundRobinMatches, bracketMatches, advanceBracketWinner, swissRound } from './lib/engine';
+import type { AppState, Player, Tournament, Format, Match, MatchRound } from './lib/types';
+import {
+  uid,
+  roundRobinMatches,
+  bracketMatches,
+  advanceBracketWinner,
+  resetDownstreamBracketMatches,
+  swissRound,
+  ptsForFinish,
+  SAMPLE_ROSTER,
+} from './lib/engine';
 import { loadState, saveState, clearState, exportJson, importJson } from './lib/storage';
 import { RegistrationScreen } from './components/Registration';
 import { DashboardScreen } from './components/Dashboard';
@@ -16,10 +25,14 @@ type Action =
   | { type: 'SET_PLAYERS'; players: Player[] }
   | { type: 'ADD_PLAYER'; player: Player }
   | { type: 'REMOVE_PLAYER'; id: string }
+  | { type: 'LOAD_SAMPLE_ROSTER' }
   | { type: 'CREATE_TOURNAMENT'; name: string; format: Format; targetScore: number | null }
   | { type: 'SET_ACTIVE_TOURNAMENT'; id: string | null }
   | { type: 'START_MATCH'; matchId: string }
   | { type: 'RECORD_ROUND'; matchId: string; round: MatchRound }
+  | { type: 'UNDO_ROUND'; matchId: string }
+  | { type: 'REPLAY_MATCH'; matchId: string }
+  | { type: 'EDIT_MATCH_IN_ARENA'; matchId: string }
   | { type: 'FINISH_MATCH'; matchId: string; p1Score: number; p2Score: number; winnerId: string | null }
   | { type: 'CANCEL_MATCH' }
   | { type: 'LOAD_STATE'; state: AppState }
@@ -34,6 +47,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, players: [...state.players, action.player] };
     case 'REMOVE_PLAYER':
       return { ...state, players: state.players.filter((p) => p.id !== action.id) };
+    case 'LOAD_SAMPLE_ROSTER':
+      return { ...state, players: [...SAMPLE_ROSTER] };
     case 'CREATE_TOURNAMENT': {
       const t: Tournament = {
         id: uid(),
@@ -74,6 +89,51 @@ function reducer(state: AppState, action: Action): AppState {
       });
       return { ...state, tournaments };
     }
+    case 'UNDO_ROUND': {
+      const tournaments = state.tournaments.map((t) => {
+        if (t.id !== state.activeTournamentId) return t;
+        const matches = t.matches.map((m) => {
+          if (m.id !== action.matchId || m.rounds.length === 0) return m;
+          const rounds = m.rounds.slice(0, -1);
+          let p1Score = 0;
+          let p2Score = 0;
+          rounds.forEach((r) => {
+            if (r.winnerId === m.p1Id) p1Score += ptsForFinish(r.finish);
+            else if (r.winnerId === m.p2Id) p2Score += ptsForFinish(r.finish);
+          });
+          return { ...m, rounds, p1Score, p2Score, completed: false, winnerId: null };
+        });
+        return { ...t, matches };
+      });
+      return { ...state, tournaments };
+    }
+    case 'REPLAY_MATCH': {
+      const tournaments = state.tournaments.map((t) => {
+        if (t.id !== state.activeTournamentId) return t;
+        let matches = t.matches.map((m) =>
+          m.id === action.matchId
+            ? { ...m, rounds: [], p1Score: 0, p2Score: 0, winnerId: null, completed: false }
+            : m
+        );
+        if (t.format === 'single-elimination') {
+          matches = resetDownstreamBracketMatches(matches, action.matchId);
+        }
+        return { ...t, matches, activeMatchId: action.matchId };
+      });
+      return { ...state, tournaments };
+    }
+    case 'EDIT_MATCH_IN_ARENA': {
+      const tournaments = state.tournaments.map((t) => {
+        if (t.id !== state.activeTournamentId) return t;
+        const matches = t.matches.map((m) =>
+          m.id === action.matchId
+            ? { ...m, completed: false, winnerId: null }
+            : m
+        );
+        return { ...t, matches, activeMatchId: action.matchId };
+      });
+      return { ...state, tournaments };
+    }
     case 'FINISH_MATCH': {
       const tournaments = state.tournaments.map((t) => {
         if (t.id !== state.activeTournamentId) return t;
@@ -108,21 +168,6 @@ function reducer(state: AppState, action: Action): AppState {
     }
     default:
       return state;
-  }
-}
-
-function ptsForFinish(f: FinishType): number {
-  switch (f) {
-    case 'SPIN':
-      return 1;
-    case 'BURST':
-    case 'OVER':
-      return 2;
-    case 'XTREME':
-      return 3;
-    case 'DRAW':
-    default:
-      return 0;
   }
 }
 
