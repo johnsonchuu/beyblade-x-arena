@@ -3,6 +3,7 @@ import { Swords, PlayCircle, Trophy, BarChart3, RefreshCw, Layers, UserCheck, Ra
 import type { Match, Tournament, Player, FinishType } from '../lib/types';
 import { computeStandings, playerName, formatLabel, getNextReadyMatch, ptsForFinish } from '../lib/engine';
 import { useI18n } from '../lib/i18n';
+import { ChampionsPodium } from './ChampionsPodium';
 
 interface Props {
   tournament: Tournament | null;
@@ -24,6 +25,7 @@ const FINISH_SHORT: Record<FinishType, string> = {
 export function DashboardScreen({ tournament, onGenerateMatches, onStartMatch, onReplayMatch, onEditMatchInArena, onScreenChange }: Props) {
   const { t } = useI18n();
   const [selectedCompletedMatch, setSelectedCompletedMatch] = useState<Match | null>(null);
+  const [podiumOpen, setPodiumOpen] = useState(false);
   if (!tournament) {
     return (
       <div className="panel p-8 text-center space-y-4">
@@ -149,6 +151,29 @@ export function DashboardScreen({ tournament, onGenerateMatches, onStartMatch, o
         </div>
       </section>
 
+      {/* Champions Celebration Banner — all matches completed */}
+      {tournament.matches.length > 0 && completed === tournament.matches.length && !podiumOpen && (
+        <section className="panel p-5 relative overflow-hidden border-2 border-gold/60 shadow-glow-gold bg-gradient-to-r from-panel via-gold/5 to-panel">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <Trophy size={32} className="text-gold animate-bounce-short flex-shrink-0" />
+              <div className="min-w-0">
+                <h3 className="text-base font-bold font-heading text-gold uppercase tracking-wider truncate">
+                  {t('podiumTitle')}
+                </h3>
+                <p className="text-xs text-gray-400 font-mono truncate">{t('podiumSubtitle')}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setPodiumOpen(true)}
+              className="btn-primary w-full sm:w-auto px-6 py-3 rounded-xl shadow-glow-gold hover:shadow-glow-lg flex items-center justify-center gap-2 font-heading text-sm tracking-wider flex-shrink-0"
+            >
+              <Trophy size={16} /> {t('champion1st')}
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* On-Deck Hero Banner */}
       {nextReadyMatch && (
         <section className="panel p-5 relative overflow-hidden border-2 border-neon/60 shadow-glow bg-gradient-to-r from-panel via-panel/95 to-neon/5">
@@ -240,6 +265,18 @@ export function DashboardScreen({ tournament, onGenerateMatches, onStartMatch, o
             ))}
           </div>
         </section>
+      )}
+
+      {/* Champions Podium Modal */}
+      {podiumOpen && (
+        <ChampionsPodium
+          tournament={tournament}
+          onViewBattleCard={() => {
+            setPodiumOpen(false);
+            onScreenChange('analytics');
+          }}
+          onClose={() => setPodiumOpen(false)}
+        />
       )}
 
       {/* Match Summary & Actions Modal */}
