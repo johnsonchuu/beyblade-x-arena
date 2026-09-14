@@ -9,6 +9,7 @@ interface Props {
   players: Player[];
   onAddPlayer: (p: Player) => void;
   onRemovePlayer: (id: string) => void;
+  onLoadSampleRoster: () => void;
   onStartTournament: (name: string, format: Format, targetScore: number | null) => void;
   hasTournament: boolean;
 }
@@ -21,7 +22,7 @@ const FORMAT_KEY: Record<Format, 'formatRoundRobin' | 'formatSingleElim' | 'form
   swiss: 'formatSwiss',
 };
 
-export function RegistrationScreen({ players, onAddPlayer, onRemovePlayer, onStartTournament, hasTournament }: Props) {
+export function RegistrationScreen({ players, onAddPlayer, onRemovePlayer, onLoadSampleRoster, onStartTournament, hasTournament }: Props) {
   const { t } = useI18n();
   const [name, setName] = useState('');
   const [showDeckConfig, setShowDeckConfig] = useState(false);
@@ -87,6 +88,21 @@ export function RegistrationScreen({ players, onAddPlayer, onRemovePlayer, onSta
         </div>
 
         <div className="space-y-4">
+          {/* Quick Load Sample Roster */}
+          <div className="flex justify-end mb-2">
+            <button
+              type="button"
+              className="btn-ghost text-xs py-1.5 px-3 rounded-lg border-neon/40 text-neon hover:bg-neon/10 flex items-center gap-1.5 font-mono"
+              onClick={() => {
+                onLoadSampleRoster();
+                setSuccess(t('sampleLoaded'));
+              }}
+            >
+              <Sparkles size={14} className="text-neon" />
+              <span>{t('loadSampleRoster')}</span>
+            </button>
+          </div>
+
           {/* Direct Blader Name Input */}
           <div className="flex gap-2">
             <input

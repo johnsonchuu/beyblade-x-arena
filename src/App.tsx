@@ -254,6 +254,7 @@ export default function App() {
             players={state.players}
             onAddPlayer={(p) => dispatch({ type: 'ADD_PLAYER', player: p })}
             onRemovePlayer={(id) => dispatch({ type: 'REMOVE_PLAYER', id })}
+            onLoadSampleRoster={() => dispatch({ type: 'LOAD_SAMPLE_ROSTER' })}
             onStartTournament={handleStartTournament}
             hasTournament={!!activeTournament}
           />
